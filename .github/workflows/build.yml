@@ -3,21 +3,26 @@ name: build
 on:
   push:
     branches: [main, master]
-    tags: [v*]
+    tags: ["v*"]
   pull_request:
     branches: [main, master]
 
 permissions:
-  contents: write   # OK since you create releases on tags
+  contents: write
 
 jobs:
   build-rust:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
+
+      # Optional: only if your workflow/scripts use jq on the runner
+      - name: Install jq (runner)
+        run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Install Rust toolchain + components
         run: |
@@ -34,7 +39,7 @@ jobs:
         uses: taiki-e/install-action@nextest
 
       - name: Check code format
-        run: cargo fmt -- --check
+        run: cargo fmt --all -- --check
 
       - name: Check the package for errors
         run: cargo check --workspace --all-targets
@@ -42,9 +47,9 @@ jobs:
       - name: Lint rust sources
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-      # If you don't have tests yet, either comment this out or switch to cargo test --no-tests
-      - name: Execute rust tests (allow none)
-        run: cargo test --all-features --no-tests
+      # If you have tests, prefer nextest; if not, keep cargo test
+      - name: Run tests
+        run: cargo test --workspace --all-features
 
       - name: Generate a changelog
         uses: orhun/git-cliff-action@v2
@@ -61,3 +66,5 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           body: ${{ steps.git-cliff.outputs.content }}
+          files: |
+            CHANGES.md
