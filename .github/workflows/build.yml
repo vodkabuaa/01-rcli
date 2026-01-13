@@ -1,70 +1,37 @@
-name: build
+name: Cargo Build & Test
 
 on:
   push:
-    branches: [main, master]
-    tags: ["v*"]
+    branches: [ "main" ]
   pull_request:
-    branches: [main, master]
+    branches: [ "main" ]
 
-permissions:
-  contents: write
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  build-rust:
-    runs-on: ubuntu-slim
-
+  build_and_test:
+    name: Rust project - ${{ matrix.toolchain }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+          - beta
+          - nightly
     steps:
       - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          fetch-depth: 0
-          submodules: recursive
-
-      # Optional: only if your workflow/scripts use jq on the runner
-      - name: Install jq (runner)
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Install Rust toolchain + components
-        run: |
-          rustup toolchain install stable --profile minimal \
-            --component rustfmt --component clippy --component llvm-tools-preview
-          rustup default stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-
-      - name: Install nextest
-        uses: taiki-e/install-action@nextest
-
-      - name: Check code format
-        run: cargo fmt --all -- --check
-
-      - name: Check the package for errors
-        run: cargo check --workspace --all-targets
-
-      - name: Lint rust sources
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-
-      # If you have tests, prefer nextest; if not, keep cargo test
-      - name: Run tests
-        run: cargo test --workspace --all-features
-
-      - name: Generate a changelog
-        uses: orhun/git-cliff-action@v2
-        id: git-cliff
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          config: cliff.toml
-          args: -vv --latest --strip header
-        env:
-          OUTPUT: CHANGES.md
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          body: ${{ steps.git-cliff.outputs.content }}
-          files: |
-            CHANGES.md
+          toolchain: ${{ matrix.toolchain }}
+          components: clippy, rustfmt # Optional: Install clippy and rustfmt
+      - name: Run cargo build
+        run: cargo build --verbose
+      - name: Run cargo test
+        run: cargo test --verbose
+      # Optional steps for linting and formatting
+      - name: Run cargo clippy
+        run: cargo clippy -- -D warnings # Fails if warnings are found
+      - name: Run cargo fmt
+        run: cargo fmt --all -- --check # Fails if code is not formatted
